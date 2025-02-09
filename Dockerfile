@@ -74,4 +74,5 @@ ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 
 EXPOSE 3389
 EXPOSE 5901
-CMD ["/usr/local/bin/start-tigervnc.sh"]
+# CMD ["/usr/local/bin/start-tigervnc.sh"]
+# CMD ["/usr/local/bin/start-xrdp.sh"]
