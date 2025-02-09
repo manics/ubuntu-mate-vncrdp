@@ -62,6 +62,7 @@ ARG UBUNTU_INITIAL_PASSWORD=ubuntu123
 RUN rm /etc/xrdp/cert.pem /etc/xrdp/key.pem && \
     chmod a+r /etc/xrdp/* && \
     install -o ubuntu -d /run/xrdp && \
+    install -o ubuntu -d /etc/xrdp/ubuntu && \
     echo "ubuntu:$UBUNTU_INITIAL_PASSWORD" | chpasswd
 
 # /home/ubuntu may be overwritten with a persistent volume
