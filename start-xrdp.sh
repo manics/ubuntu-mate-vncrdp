@@ -16,5 +16,10 @@ if [ ! -f "$XRDP_DIR/xrdp.ini" ]; then
   sed -e "s|username=ask|username=$USERNAME|" -e "s|password=ask|password=$NEW_PASSWORD|" /etc/xrdp/xrdp.ini > "$XRDP_DIR/xrdp.ini"
 fi
 
+if [ ! -d /home/ubuntu/Desktop ]; then
+  echo "First run, setting up ubuntu"
+  rsync /home/ubuntu.orig/ -av --ignore-existing /home/ubuntu/
+fi
+
 DISPLAY=:10 xrdp-sesman --nodaemon --config /etc/xrdp/sesman.ini &
 exec xrdp --nodaemon --config "$XRDP_DIR/xrdp.ini"
