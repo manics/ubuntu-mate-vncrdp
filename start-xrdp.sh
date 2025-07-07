@@ -24,6 +24,8 @@ if [ ! -f "$XRDP_DIR/xrdp.ini" ]; then
   fi
 fi
 
+unset NEW_PASSWORD
+
 if [ ! -d /home/ubuntu/Desktop ]; then
   echo "First run, setting up ubuntu"
   rsync /home/ubuntu.orig/ -av --ignore-existing /home/ubuntu/
