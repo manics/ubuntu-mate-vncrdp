@@ -59,11 +59,15 @@ COPY start-mate.sh start-tigervnc.sh start-xrdp.sh /usr/local/bin/
 COPY xrdp.ini sesman.ini passwd.expect /etc/xrdp/
 
 ARG UBUNTU_INITIAL_PASSWORD=ubuntu123
+# HOME may be mounted and shared amongst multiple containers so container
+# specific initialisation must go somewhere else
 RUN rm /etc/xrdp/cert.pem /etc/xrdp/key.pem && \
     chmod a+r /etc/xrdp/* && \
     install -o ubuntu -d /run/xrdp && \
     install -o ubuntu -d /etc/xrdp/ubuntu && \
-    echo "ubuntu:$UBUNTU_INITIAL_PASSWORD" | chpasswd
+    echo "ubuntu:$UBUNTU_INITIAL_PASSWORD" | chpasswd && \
+    install -d /etc/vnc && \
+    install -o ubuntu -d /etc/vnc/ubuntu
 
 # /home/ubuntu may be overwritten with a persistent volume
 # Create a copy and restore on first start if necessary
