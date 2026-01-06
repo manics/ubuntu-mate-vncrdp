@@ -15,32 +15,28 @@ env:
   # Set to "<branch-name>" to also publish on every push to <branch-name>
   PUBLISH_BRANCH: "main"
   DEV_BRANCH: dev
-  # PLATFORMS: linux/amd64,linux/arm64
-  PLATFORMS: linux/amd64
 
 jobs:
 
+  # Build a multi-arch image using native runners (takes too long with emulation)
+  # Based on
+  # https://github.com/sredevopsorg/multi-arch-docker-github-workflow/blob/0fe24c85ac35652bc7eb4e0788f20dbcc05e9643/.github/workflows/multi-build.yaml
+
   build:
     name: Build
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          - arm64
+    runs-on: ubuntu-24.04${{ matrix.arch == 'arm64' && '-arm' || '' }}
+    outputs:
+      push: ${{ steps.image.outputs.push }}
+      image: ${{ steps.image.outputs.image }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          flavor: latest=false
-          images: ${{ env.REGISTRY }}/${{ env.OWNER_IMAGE }}
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Should container be pushed
+      - name: Image name and should it be pushed
+        id: image
         run: |
           PUSH="${{ github.event_name == 'push' &&
             (
@@ -49,23 +45,109 @@ jobs:
               startsWith(github.ref, 'refs/tags/')
             )
           }}"
-          echo PUSH="$PUSH" >> $GITHUB_ENV
+          echo "push=$PUSH" >> $GITHUB_OUTPUT
+          echo "image=${{ env.REGISTRY }}/${{ env.OWNER_IMAGE }}" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          flavor: |
+            latest=false
+            suffix=-${{ matrix.arch }}
+          images: ${{ steps.image.outputs.image }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to container registry
         uses: docker/login-action@v3
-        if: ${{ env.PUSH == 'true' }}
+        if: ${{ steps.image.outputs.push == 'true' }}
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push to container registry
+        id: build
         uses: docker/build-push-action@v6
         with:
-          # Needed so that .git directory is available to embed version info
-          platforms: ${{ env.PLATFORMS }}
+          platforms: linux/${{ matrix.arch }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          push: ${{ env.PUSH }}
+          load: ${{ steps.image.outputs.push != 'true' }}
+          push: ${{ steps.image.outputs.push == 'true' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Export digest
+        run: |
+          mkdir build-digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "build-digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v6
+        with:
+          name: digests-${{ matrix.arch }}
+          path: build-digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    # Merges Docker manifests for the different platforms
+    name: Merge manifests
+    runs-on: ubuntu-24.04
+    needs:
+      - build
+    if: ${{ needs.build.outputs.push == 'true' }}
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v7
+        with:
+          path: build-digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ needs.build.outputs.image }}
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manifest list and push
+        working-directory: build-digests
+        run: |
+          # map meta.tags to --tag=tag1 --tag=tag2
+          # map meta.annotations to --annotations=annotation
+          # - remove manifest: key prefix
+
+          docker buildx imagetools create \
+            \
+            $(jq -cr '.tags | map("--tag=" + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            \
+            $(jq -cr '.annotations | map(sub("^manifest:"; "")) | map("--annotation=index:" + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            \
+            $(printf '${{ needs.build.outputs.image }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect "${{ needs.build.outputs.image }}:$DOCKER_METADATA_OUTPUT_VERSION"
