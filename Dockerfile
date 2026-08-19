@@ -35,7 +35,7 @@ RUN mkdir -p /opt/conda/Desktop /opt/conda/icons && \
 USER ubuntu
 WORKDIR /home/ubuntu
 
-ARG MINIFORGE_VERSION=25.1.1-0
+ARG MINIFORGE_VERSION=26.5.3-0
 RUN curl -sfL https://github.com/conda-forge/miniforge/releases/download/$MINIFORGE_VERSION/Miniforge3-$MINIFORGE_VERSION-Linux-`uname -m`.sh -o Miniforge3.sh && \
     bash Miniforge3.sh -b -f -p /opt/conda && \
     rm -f Miniforge.sh
