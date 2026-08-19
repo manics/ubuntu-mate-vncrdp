@@ -61,10 +61,12 @@ COPY xrdp.ini sesman.ini passwd.expect /etc/xrdp/
 ARG UBUNTU_INITIAL_PASSWORD=ubuntu123
 # HOME may be mounted and shared amongst multiple containers so container
 # specific initialisation must go somewhere else
+# Disable password quality checks
 RUN rm /etc/xrdp/cert.pem /etc/xrdp/key.pem && \
     chmod a+r /etc/xrdp/* && \
     install -o ubuntu -d /run/xrdp && \
     install -o ubuntu -d /etc/xrdp/ubuntu && \
+    sed -i -e '/pam_pwquality\.so/s/^/# /' -e '/pam_unix\.so/s/ use_authtok / /' /etc/pam.d/common-password && \
     echo "ubuntu:$UBUNTU_INITIAL_PASSWORD" | chpasswd && \
     install -d /etc/vnc && \
     install -o ubuntu -d /etc/vnc/ubuntu
