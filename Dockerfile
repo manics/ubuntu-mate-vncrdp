@@ -1,5 +1,5 @@
 # Ubuntu Mate desktop with Firefox, Conda and JupyterLab
-FROM docker.io/library/ubuntu:24.04
+FROM docker.io/library/ubuntu:26.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -14,6 +14,7 @@ RUN apt-get update -y -q && \
         expect \
         jq \
         less \
+        rsync \
         tigervnc-standalone-server \
         ubuntu-mate-desktop \
         vim \
